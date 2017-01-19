@@ -1,3 +1,4 @@
+*.swp
 .DS_Store
 derby.log
 metastore_db/

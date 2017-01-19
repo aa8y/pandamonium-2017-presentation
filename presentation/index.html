@@ -30,7 +30,7 @@ class: center, middle
 
 1. Big Data
 2. Spark vs Hadoop
-3. 
+3.
 
 ---
 
@@ -150,18 +150,151 @@ But we will mainly talk about the Scala API.
 
 --
 
-- Based on the paper, _Resilient Distributed Datasets: A Fault-Tolerant Abstraction for In-Memory Cluster Computing_ by Matei Zaharia.
+- Based on a paper by Matei Zaharia.
+
+  - _Resilient Distributed Datasets: A Fault-Tolerant Abstraction for In-Memory Cluster Computing._
 
 ???
-Berkeley AMPLab alum and co-founder of Databricks which is primary Spark contirbuter.
+Berkeley AMPLab alum and co-founder of Databricks which is primary Spark contributer.
 --
 
-- 
+They are,
+
+--
+
+- Distributed: Data resides on different JVMs on different nodes.
+
+--
+
+- Typed: Data in RDDs can be assigned types.
+  - For eg. `RDD[String]`, `RDD[Long]`, `RDD[Person]`, etc.
+
+--
+
+- Immutable: Data in an RDD, cannot be changed but can only be transformed, resulting in a new RDD.
+
+???
+Resulting in a new RDD.
+--
+
+- Lazily evaluated: No operation is performed on an RDD until an action, which forces execution, is performed.
+
+--
+
+- Fault-tolerant: Can recover damaged partitions.
+
+--
+
+- Supports a lot more oprations than `map` and `reduce`.
+
+???
+Let's talk about these more now.
+---
+
+# Creating an RDD
+
+--
+
+- Can be created using a `SparkContext`.
+
+--
+
+  - A `SparkContext` is an entry point into Spark for any Spark application.
+
+--
+
+```scala
+import org.apache.spark.SparkContext
+
+object LearningRdd {
+  // Parameters in Scala can be named.
+  val sc = new SparkContext(master = "master[2]", appName = "learningRdd")
+
+  // They can be partially named.
+  // `numSlices` defaults to `sc.defaultParallelism` which maps to total
+  // number of cores.
+  val rddFromCollection = sc.parallelize(1 to 100, numSlices = 10)
+
+  // They don't have to be named.
+  val rddFromTextFile = sc.textFile("/path/to/text/file")
+}
+```
+
+--
+
+- At this point none of these `RDD`s have even been computed. We would have to perform an action which forces execution.
+
+--
+
+```scala
+val sum = rddFromCollection.reduce(_ + _) // same as `reduce { (x, y) => x + y }`
+```
+
+---
+
+# Why are RDDs lazy?
+
+--
+
+Let's look at this code snippet.
+
+--
+
+```scala
+val nums = sc.parallelize(1 to 100)
+
+// `groupBy` returns an RDD of key-value pairs, `RDD[(Int, Iterable[Int])]` here.
+val grouped = nums.groupBy(_ % 3)
+
+// `_1` accesses the first element in a Scala tuple.
+// `max` forces computation of an RDD like `reduce`.
+val maxKey = grouped.map(_._1).max
+
+// `flatMap` maps over any iterable and flattens all the elements.
+val sum = grouped
+  .flatMap(_._2)
+  .map(_ * maxKey)
+  .reduce(_ + _)
+```
+
+--
+
+In the Spark UI, we'll see this:
+
+--
+
+.center[![:scale 100%](images/skipped.png)]
+
+---
+
+# RDD dependency (or lineage) graph
+
+--
+
+Spark first creates a DAG of all the operations to be performed. The DAG for the previous `maxKey` looks like this.
+
+--
+
+.center[![:scale 25%](images/maxDag.png)]
+
+--
+
+The DAG for `sum` however looks like this.
+
+--
+
+.center[![:scale 25%](images/sumDag.png)]
+
+
 
     </textarea>
     <script src="remark-latest.min.js" type="text/javascript">
     </script>
     <script type="text/javascript">
+      remark.macros.scale = function (percentage) {
+        var url = this;
+        return '<img src="' + url + '" style="width: ' + percentage + '" />';
+      };
       var slideshow = remark.create();
     </script>
   </body>
