@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>My Awesome Presentation</title>
+    <title>Understanding Spark</title>
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
     <style type="text/css">
       @import url(https://fonts.googleapis.com/css?family=Yanone+Kaffeesatz);
@@ -21,24 +21,142 @@
 
 class: center, middle
 
-# My Awesome Presentation
-
-???
-
-Notes for the _first_ slide!
+# Understanding Spark
+### by Arun Allamsetty
 
 ---
 
 # Agenda
 
-1. Introduction
-2. Deep-dive
-3. ...
+1. Big Data
+2. Spark vs Hadoop
+3. 
 
-[NOTE]: Note that you need remark.js alongside this html file, but no internet connection.
 ---
 
-# Introduction
+# Big Data
+
+## What comes to mind?
+--
+
+- Yet another buzzword, maybe?
+
+--
+
+- Hadoop?
+
+---
+
+# Big Data
+
+## What comes to mind?
+
+- Yet another buzzword, maybe?
+
+- ~~Hadoop?~~ Probably not.
+
+--
+
+- Spark
+
+--
+
+Why?
+
+---
+
+# Let's start with Hadoop
+--
+
+### The Good
+--
+
+- Distributed computing was hard and expensive.
+
+--
+
+- MapReduce paradigm based on a paper published by Google.
+
+???
+Any computation performed by a functional map and reduce can be easily parallelized.
+--
+
+- Fault tolerant distributed file system: HDFS
+
+--
+
+- Inexpensive to operate as it could run on commodity hardware.
+
+--
+
+### The bad
+
+--
+
+- Writes data to disk after each operation.
+
+???
+This was done to provide a checkpoint feature.
+--
+
+- Doesn't support in-memory operations.
+
+--
+
+- While MapReduce is easier, it is no SQL (pun not intended).
+
+---
+
+# What about Spark?
+
+???
+Takes all the good things from Hadoop and leaves out the bad.
+--
+
+- Supports HDFS (or other Hadoop-supported file systems). For example,
+
+--
+
+  - Amazon S3
+--
+
+  - Windows Azure Storage Blobs (WASB).
+
+--
+
+- *Does not* write to disk after each operation.
+--
+
+  - Uses RDD (Resilient Distributed Datasets) which can recover from failures.
+--
+
+  - Is a lot faster than Hadoop.
+
+--
+
+- Supports in-memory operations.
+
+???
+Is one of its major selling points.
+--
+
+- Written in Scala. Also supports Java and Python.
+
+???
+But we will mainly talk about the Scala API.
+---
+
+# RDD (Resilient Distributed Datasets)
+
+--
+
+- Based on the paper, _Resilient Distributed Datasets: A Fault-Tolerant Abstraction for In-Memory Cluster Computing_ by Matei Zaharia.
+
+???
+Berkeley AMPLab alum and co-founder of Databricks which is primary Spark contirbuter.
+--
+
+- 
 
     </textarea>
     <script src="remark-latest.min.js" type="text/javascript">
