@@ -275,17 +275,184 @@ Spark first creates a DAG of all the operations to be performed. The DAG for the
 
 --
 
-.center[![:scale 25%](images/maxDag.png)]
+.center[![:scale 40%](images/maxDag.png)]
 
---
+---
+
+# RDD dependency (or lineage) graph
 
 The DAG for `sum` however looks like this.
 
 --
 
-.center[![:scale 25%](images/sumDag.png)]
+.center[![:scale 40%](images/sumDag.png)]
 
+--
 
+Hence, lazy evaluation allows Spark avoid unnecessary recomputation of the same data.
+
+---
+
+# (R)esilience in RDD
+
+--
+
+With this information, let's see how RDDs are fault-tolerant.
+
+--
+
+- If at a stage, a partition is lost due to some reason, Spark knows exactly how to get a new partition at that stage due to the DAG it created in the first place.
+
+--
+
+- Immutability of RDDs ensures that the newly resurrected partition has exactly the same data as before.
+
+---
+
+# RDDs are typed
+
+--
+
+Here's an example.
+
+--
+
+```scala
+// Case classes in Scala are a classes with a few helper functions prebuilt
+// into them to avoid boilerplate code like in Java.
+case class Person(fname: String, lname: String, age: Int)
+
+// :: is a function in a Scala `List` which lets you prepend to a list. `Nil`
+// is an empty list. One of the helper function in a case class is `apply`
+// which lets you construct objects with function-like syntax.
+// `Person("John", "Doe", 25)` is same as `Person.apply("John", "Doe", 25)`.
+val persons = sc.parallelize(
+  Person("John", "Doe", 38) ::
+  Person("Jane", "Doe", 35) ::
+  Person("Jon", "Doe", 20) ::
+  Persom("Jonathan", "Doe", 31) :: Nil)
+
+val oldPersons = persons.filter(_.age > 30)
+val oldJons = oldPersons.filter(_.name.toLowerCase.startsWith("jon"))
+val numOldJons = oldJos.count
+```
+
+---
+
+# SQL on Spark
+
+--
+
+SQL has been the de facto standard for data analysis since a long time.
+
+--
+
+  - Hadoop lacked in this area. SQL users were not excited to use MapReduce.
+
+--
+
+  - Hive was created to run SQL on Hadoop.
+
+--
+
+  - It was very popular, but was painfully slow.
+
+--
+
+To cater to SQL users, Spark added support for HiveQL which was dubbed Shark. In Spark 1.0, this is how SQL queries could be run on Spark.
+
+--
+
+```scala
+val hiveContext = new HiveContext(sc) // Needs an existing `SparkContext`.
+
+// The `Person` case class provided the necessary schema.
+val personsTable: SchemaRDD = hiveContext.createSchemaRDD(persons)
+
+// Registering it makes it available as queriable a table.
+hiveContext.registerRDDAsTable(personsTable, "persons")
+
+// And now HiveQL queries can be run.
+val numOldJons = hiveContext.hql("""
+  |SELECT * FROM persons
+  |WHERE age > 30 AND lower(name) LIKE 'jon%'
+""".stripMargin.trim).count
+```
+
+---
+
+# Project Tungsten
+
+This was a performance optimization initiative by Spark which resulted the introduction of the _Catalyst query optimizer_ for SQL queries over other things.
+
+--
+
+- Spark SQL was introduced. HiveQL support still existed through `HiveContext`, but was not recommended.
+
+--
+
+- `SchemaRDD` was removed and a new `DataFrame` API was introduced.
+
+--
+
+```scala
+val sqlContext = new SQLContext(sc) // Needs an existing `SparkContext`.
+
+// A DataFrame can be created using `createDataFrame` and passing an RDD of
+// a case class.
+val personsDf: DataFrame = sqlContext.createDataFrame(persons)
+
+// A DataFrame can be registered by calling `registerTempTable` on the object.
+personsDf.registerTempTable("persons")
+
+// SQL queries can be run using the `sql` function.
+val numOldJons = sqlContext.sql("""
+  |SELECT * FROM persons
+  |WHERE age > 30 AND lower(name) LIKE 'jon%'
+""".stripMargin.trim).count
+```
+
+---
+
+# DataFrame API
+
+--
+
+It was similar to `SchemaRDD`, except it was faster and supported more features.
+
+--
+
+```scala
+// No longer need SQLContext. Can run queries on the DataFrame object.
+personsDf.filter("age > 30").filter("lower(name) LIKE 'jon%'").count
+```
+
+--
+
+```scala
+import org.apache.spark.sql.functions.lower
+// Required to use $"colName" which is syntactic sugar for new Column("colName").
+import sqlContext.implicits._
+
+// SQL-like DSL enables running typed queries on DataFrames.
+personsDf.filter($"age" > 30).filter(lower($"name").startsWith("jon").count
+```
+
+--
+
+```scala
+// Running non-DSL functions, like `map`, would return an RDD since there is no
+// way of knowing what each `Row` object would be mapped into. And all Catalyst
+// performance benefits would lost with RDDs.
+val info: RDD[String] = personsDf.map { row =>
+
+  // `Row`s are not typed. So we lose on type safety as well.
+  val fname = row.getAs[String]("fname")
+  val age = row.getAs[Int]("age")
+
+  s"$fname aged $age."
+}
+```
 
     </textarea>
     <script src="remark-latest.min.js" type="text/javascript">
