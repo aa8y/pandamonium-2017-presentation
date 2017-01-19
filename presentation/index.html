@@ -13,6 +13,13 @@
         font-family: 'Yanone Kaffeesatz';
         font-weight: normal;
       }
+      table {
+        border-collapse: collapse;
+      }
+      th, td {
+        padding: 5px;
+        border: 1px solid black;
+      }
       .remark-code, .remark-inline-code { font-family: 'Ubuntu Mono'; }
     </style>
   </head>
@@ -23,14 +30,6 @@ class: center, middle
 
 # Understanding Spark
 ### by Arun Allamsetty
-
----
-
-# Agenda
-
-1. Big Data
-2. Spark vs Hadoop
-3.
 
 ---
 
@@ -418,7 +417,7 @@ val numOldJons = sqlContext.sql("""
 
 --
 
-It was similar to `SchemaRDD`, except it was faster and supported more features.
+It was similar to `SchemaRDD`, except it was more performant and supported more features.
 
 --
 
@@ -434,7 +433,7 @@ import org.apache.spark.sql.functions.lower
 // Required to use $"colName" which is syntactic sugar for new Column("colName").
 import sqlContext.implicits._
 
-// SQL-like DSL enables running typed queries on DataFrames.
+// Quasi-SQL DSL to query DataFrames without writing SQL.
 personsDf.filter($"age" > 30).filter(lower($"name").startsWith("jon").count
 ```
 
@@ -445,14 +444,167 @@ personsDf.filter($"age" > 30).filter(lower($"name").startsWith("jon").count
 // way of knowing what each `Row` object would be mapped into. And all Catalyst
 // performance benefits would lost with RDDs.
 val info: RDD[String] = personsDf.map { row =>
-
   // `Row`s are not typed. So we lose on type safety as well.
   val fname = row.getAs[String]("fname")
   val age = row.getAs[Int]("age")
 
+  // Scala string interpolation with s"", similar to JS ``.
   s"$fname aged $age."
 }
 ```
+
+---
+
+# RDD vs DataFrame
+
+| RDD | DataFrame |
+|-----|-----------|
+| Typed. Error can be caught during compilation. | Untyped. Errors surface at runtime. |
+
+--
+| Slower. Cannot benefit from Catalyst optimizer. | Faster. Heavily uses Catalyst optimizer. |
+
+--
+| Cannot run SQL. | Can run SQL. |
+
+--
+| Fully supports `map`-like operations | `map`-like operations return an RDD. |
+
+--
+
+In the end,
+
+--
+
+- People who heavily invested in RDDs in the beginning were not benefiting from the Catalyst optimizer.
+
+--
+
+- People who wanted the benefits of Catalyst optimizer and wanted to mix and match SQL and MapReduce didn't have a good option.
+
+---
+
+# Dataset API
+
+--
+
+- Spark 1.6 witnessed the release of the Dataset API which _supposedly_ had the best of both worlds.
+
+--
+
+- `Dataset`s were used the Catalyst optimizer and were typed.
+
+--
+
+- They did not support SQL.
+
+--
+
+- So they were *not* the best of both worlds, but just better RDDs.
+
+--
+
+```scala
+// Import for Catalyst to understand the typed case classes. This imports
+// implicit encoders for generic types (String, Long, etc.) and case classes.
+import sqlContext.implicits._
+
+// The `as[Person]` creates a `Dataset[Person]`
+val personsDs = sqlContext.createDataFrame(persons).as[Person]
+
+// Operations similar to RDDs can be performed.
+val oldJons = personsDs.filter { person =>
+  person.age > 30 && person.name.toLowercase.startsWith("jon")
+}
+val numOldJons = oldJons.count
+```
+
+---
+
+# Spark 2.0+ changes
+
+--
+
+- `Dataset`s were *now* the best of both worlds with added support for SQL.
+
+--
+
+- `DataFrame` _API_ was removed.
+
+--
+
+  - `DataFrame`, however, still exists for backward-compatibility but is basically an alias for `Dataset[Row]`.
+
+--
+
+- `SparkSession` has been added as a single point of entry into Spark.
+
+--
+
+  - `SparkContext` and `SQLContext` still exist for backward-compatibility.
+
+--
+
+  - `HiveContext` is still around but has been deprecated.
+
+--
+
+```scala
+import org.apache.spark.sql.SparkSession
+
+// `SparkContext` can be accessed using `spark.sparkContext` and
+// `SQLContext` using `spark.sqlContext`.
+val spark = SparkSession.builder
+  .master("local[2]")
+  .appName("learningSpark2")
+  .config("spark.some.config.option", "some-value")
+  .getOrCreate
+```
+
+---
+
+# Examples
+
+--
+
+SQL support on `Dataset`s.
+
+--
+
+```scala
+// Import implicits from `SparkSession` similar to `SQLContext`.
+import spark.implicits._
+
+// Read data as `Dataset`.
+val personsDs = spark.createDataset(persons)
+
+// Convert the `Dataset` to `DataFrame` and register as a temporary view.
+personsDs.toDf.createOrReplaceTempView("persons")
+
+// Run SQL queries.
+val numOldJons = spark.sql("""
+  |SELECT * FROM persons
+  |WHERE age > 30 AND lower(name) LIKE 'jon%'
+""".stripMargin.trim).count
+```
+
+--
+
+RDD-like operations.
+
+--
+
+```scala
+val oldJons = personsDs.filter { person =>
+  person.age > 30 && person.name.toLowercase.startsWith("jon")
+}
+val numOldJons = oldJons.count
+```
+
+---
+class: middle, center
+
+# Thank you
 
     </textarea>
     <script src="remark-latest.min.js" type="text/javascript">
