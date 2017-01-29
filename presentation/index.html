@@ -31,9 +31,13 @@ class: center, middle
 # Understanding Spark
 ### by Arun Allamsetty
 
+???
+Don't look at these super top-secret notes.
 ---
 
 # Big Data
+
+--
 
 ## What comes to mind?
 --
@@ -72,19 +76,45 @@ Why?
 
 - Distributed computing was hard and expensive.
 
+???
+Communicating with nodes.
+Recovering partial work when a node dies.
 --
 
 - MapReduce paradigm based on a paper published by Google.
 
 ???
-Any computation performed by a functional map and reduce can be easily parallelized.
+Based functional programming map and reduce functions.
+---
+
+# map()
 --
+
+.center[![:scale 100%](images/MapBase.png)]
+---
+
+# map()
+
+.center[![:scale 100%](images/MapResult.png)]
+--
+
+# reduce()
+
+---
+
+# Let's start with Hadoop
+
+### The Good
+
+- Distributed computing was hard and expensive.
+
+- MapReduce paradigm based on a paper published by Google.
 
 - Fault tolerant distributed file system: HDFS
 
 --
 
-- Inexpensive to operate as it could run on commodity hardware.
+- Inexpensive to operate. Can run on commodity hardware.
 
 --
 
@@ -92,13 +122,13 @@ Any computation performed by a functional map and reduce can be easily paralleli
 
 --
 
-- Writes data to disk after each operation.
+- Writes to disk after each operation.
 
 ???
 This was done to provide a checkpoint feature.
 --
 
-- Doesn't support in-memory operations.
+- Doesn't support in-memory computations.
 
 --
 
@@ -117,6 +147,7 @@ Takes all the good things from Hadoop and leaves out the bad.
 --
 
   - Amazon S3
+
 --
 
   - Windows Azure Storage Blobs (WASB).
@@ -124,9 +155,11 @@ Takes all the good things from Hadoop and leaves out the bad.
 --
 
 - *Does not* write to disk after each operation.
+
 --
 
   - Uses RDD (Resilient Distributed Datasets) which can recover from failures.
+
 --
 
   - Is a lot faster than Hadoop.
@@ -611,10 +644,10 @@ class: middle, center
     </script>
     <script type="text/javascript">
       remark.macros.scale = function (percentage) {
-        var url = this;
-        return '<img src="' + url + '" style="width: ' + percentage + '" />';
-      };
-      var slideshow = remark.create();
+        const url = this
+        return `<img src="${url}" style="width: ${percentage}" />`
+      }
+      const slideshow = remark.create()
     </script>
   </body>
 </html>
