@@ -90,23 +90,28 @@ Based functional programming map and reduce functions.
 # map()
 --
 
-.center[![:scale 50%](images/MapBase.png)]
+.center[![:scale 80%](images/MapBase.png)]
 ---
 
 # map()
 
-.center[![:scale 50%](images/MapResult.png)]
+.center[![:scale 80%](images/MapResult.png)]
 ---
 
 # reduce()
 --
 
-.center[![:scale 50%](images/MapBase.png)]
+.center[![:scale 80%](images/MapResult.png)]
 ---
 
 # reduce()
 
-.center[![:scale 50%](images/MapResult.png)]
+.center[![:scale 80%](images/ReduceBase.png)]
+---
+
+# reduce()
+
+.center[![:scale 80%](images/ReduceResult.png)]
 ---
 
 # Let's start with Hadoop
@@ -194,14 +199,18 @@ Takes all the good things from Hadoop and leaves out the bad.
 
   - Windows Azure Storage Blobs (WASB).
 
+???
+Object storage service like S3.
 --
 
 - *Does not* write to disk after each operation.
 
 --
 
-  - Uses RDD (Resilient Distributed Datasets) which can recover from failures.
+  - Uses RDDs instead which can recover from failures.
 
+???
+We will see how later.
 --
 
   - Is a lot faster than Hadoop.
@@ -214,7 +223,7 @@ Takes all the good things from Hadoop and leaves out the bad.
 Is one of its major selling points.
 --
 
-- Written in Scala. Also supports Java and Python.
+- Written in Scala. Has API support for Java, Python and R.
 
 ???
 But we will mainly talk about the Scala API.
@@ -236,33 +245,45 @@ They are,
 
 --
 
-- Distributed: Data resides on different JVMs on different nodes.
-
---
-
-- Typed: Data in RDDs can be assigned types.
-  - For eg. `RDD[String]`, `RDD[Long]`, `RDD[Person]`, etc.
-
---
-
-- Immutable: Data in an RDD, cannot be changed but can only be transformed, resulting in a new RDD.
+- Distributed
 
 ???
-Resulting in a new RDD.
+Data resides on different JVMs on different nodes.
 --
 
-- Lazily evaluated: No operation is performed on an RDD until an action, which forces execution, is performed.
+- Typed
+  - For eg. `RDD[String]`, `RDD[Long]`, `RDD[Person]`, etc.
 
+???
+Data in RDDs can be assigned types.
 --
 
-- Fault-tolerant: Can recover damaged partitions.
+- Immutable
 
+???
+Data can only be transformed, resulting in a new RDD.
 --
 
-- Supports a lot more oprations than `map` and `reduce`.
+- Lazily evaluated
+
+???
+No operation is performed an action, which forces execution, is invoked.
+Map is a transformation. Reduce is an action.
+--
+
+- Fault-tolerant
+
+???
+Can recover damaged partitions.
+--
+
+- API similar to Scala collections.
 
 ???
 Let's talk about these more now.
+--
+
+  - For eg. `flatMap`, `fold`, `foreach`, `take`, `zipWithIndex` etc.
 ---
 
 # Creating an RDD
@@ -280,28 +301,84 @@ Let's talk about these more now.
 ```scala
 import org.apache.spark.SparkContext
 
-object LearningRdd {
-  // Parameters in Scala can be named.
-  val sc = new SparkContext(master = "master[2]", appName = "learningRdd")
+object RddExample extends App {
+  val sc = new SparkContext(master = "local[2]", appName = "rddExample")
+}
+```
 
-  // They can be partially named.
-  // `numSlices` defaults to `sc.defaultParallelism` which maps to total
-  // number of cores.
+???
+Scala method parameters can be named.
+---
+
+# Creating an RDD
+
+- Can be created using a `SparkContext`.
+
+  - A `SparkContext` is an entry point into Spark for any Spark application.
+
+```scala
+import org.apache.spark.SparkContext
+
+object RddExample extends App {
+  val sc = new SparkContext(master = "local[2]", appName = "rddExample")
+
+  // `numSlices` defaults to `sc.defaultParallelism` == number of virtual cores.
+  val rddFromCollection = sc.parallelize(1 to 100, numSlices = 10)
+}
+```
+
+???
+Can be created from a Scala collection.
+Method parameters can be mixed and matched.
+---
+
+# Creating an RDD
+
+- Can be created using a `SparkContext`.
+
+  - A `SparkContext` is an entry point into Spark for any Spark application.
+
+```scala
+import org.apache.spark.SparkContext
+
+object RddExample extends App {
+  val sc = new SparkContext(master = "local[2]", appName = "rddExample")
+
+  // `numSlices` defaults to `sc.defaultParallelism` == number of virtual cores.
   val rddFromCollection = sc.parallelize(1 to 100, numSlices = 10)
 
-  // They don't have to be named.
   val rddFromTextFile = sc.textFile("/path/to/text/file")
 }
 ```
 
 --
 
-- At this point none of these `RDD`s have even been computed. We would have to perform an action which forces execution.
+*Note:* At this point none of these `RDD`s have even been computed.
 
---
+???
+We would have to perform an action which forces execution.
+---
+
+# Creating an RDD
+
+- Can be created using a `SparkContext`.
+
+  - A `SparkContext` is an entry point into Spark for any Spark application.
 
 ```scala
-val sum = rddFromCollection.reduce(_ + _) // same as `reduce { (x, y) => x + y }`
+import org.apache.spark.SparkContext
+
+object RddExample extends App {
+  val sc = new SparkContext(master = "local[2]", appName = "rddExample")
+
+  // `numSlices` defaults to `sc.defaultParallelism` == number of virtual cores.
+  val rddFromCollection = sc.parallelize(1 to 100, numSlices = 10)
+
+  val rddFromTextFile = sc.textFile("/path/to/text/file")
+
+  // We would have to perform an action which forces execution.
+  val sum = rddFromCollection.reduce(_ + _) // same as `reduce((x, y) => x + y)`
+}
 ```
 
 ---
