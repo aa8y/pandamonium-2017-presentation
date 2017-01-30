@@ -387,25 +387,59 @@ object RddExample extends App {
 
 --
 
-Let's look at this code snippet.
+Let's take a simple example.
+
+--
+
+In a list of 100 random numbers find the *max* and *min* *even* and *odd* numbers.
 
 --
 
 ```scala
-val nums = sc.parallelize(1 to 100)
+import scala.util.Random
+
+// Generates 100 random numbers between 0 (inclusive) and 1000 (exclusive).
+val numsRdd = sc.parallelize(Seq.fill(100)(1000).map(Random.nextInt))
+```
+
+---
+
+# Why are RDDs lazy?
+
+Let's take a simple example.
+
+In a list of 100 random numbers find the max and min even and odd number.
+
+```scala
+import scala.util.Random
+
+// Generates 100 random numbers between 0 (inclusive) and 1000 (exclusive).
+val numsRdd = sc.parallelize(Seq.fill(100)(1000).map(Random.nextInt))
 
 // `groupBy` returns an RDD of key-value pairs, `RDD[(Int, Iterable[Int])]` here.
-val grouped = nums.groupBy(_ % 3)
+val grouped = numsRdd.groupBy(_ % 2)
+```
 
-// `_1` accesses the first element in a Scala tuple.
-// `max` forces computation of an RDD like `reduce`.
-val maxKey = grouped.map(_._1).max
+---
 
-// `flatMap` maps over any iterable and flattens all the elements.
-val sum = grouped
-  .flatMap(_._2)
-  .map(_ * maxKey)
-  .reduce(_ + _)
+# Why are RDDs lazy?
+
+Let's take a simple example.
+
+In a list of 100 random numbers find the max and min even and odd number.
+
+```scala
+import scala.util.Random
+
+// Generates 100 random numbers between 0 (inclusive) and 1000 (exclusive).
+val numsRdd = sc.parallelize(Seq.fill(100)(1000).map(Random.nextInt))
+
+// `groupBy` returns an RDD of key-value pairs, `RDD[(Int, Iterable[Int])]` here.
+val grouped = numsRdd.groupBy(_ % 2)
+
+// `collect` is an action forces computation.
+val max = grouped.mapValues(_.max).collect
+val min = grouped.mapValues(_.min).collect
 ```
 
 --
@@ -422,25 +456,310 @@ In the Spark UI, we'll see this:
 
 --
 
-Spark first creates a DAG of all the operations to be performed. The DAG for the previous `maxKey` looks like this.
+Spark first creates a DAG of all the operations to be performed. The DAG for the `max` operation looks like this.
 
 --
 
-.center[![:scale 40%](images/maxDag.png)]
+.center[![:scale 100%](images/maxDag.png)]
 
 ---
 
 # RDD dependency (or lineage) graph
 
-The DAG for `sum` however looks like this.
+The DAG for the `min` operation should look the same, right?
 
 --
 
-.center[![:scale 40%](images/sumDag.png)]
+.center[![:scale 100%](images/minDag.png)]
 
 --
 
-Hence, lazy evaluation allows Spark avoid unnecessary recomputation of the same data.
+Hence, lazy evaluation allows Spark to avoid recomputations.
+
+---
+
+# A more complex example.
+
+--
+
+Find total student enrollments in all CS courses.
+
+--
+
+```scala
+case class User(
+  id: Long,
+  fname: String,
+  lname: String,
+  isStudent: Boolean,
+  isTeacher: Boolean)
+```
+
+---
+
+# A more complex example.
+
+Find total student enrollments in all CS courses.
+
+```scala
+case class User(
+  id: Long,
+  fname: String,
+  lname: String,
+  isStudent: Boolean,
+  isTeacher: Boolean)
+
+case class Course(
+  id: Long,
+  name: String,
+  code: Int,
+  department: String,
+  `type`: String)
+```
+
+---
+
+# A more complex example.
+
+Find total student enrollments in all CS courses.
+
+```scala
+case class User(
+  id: Long,
+  fname: String,
+  lname: String,
+  isStudent: Boolean,
+  isTeacher: Boolean)
+
+case class Course(
+  id: Long,
+  name: String,
+  code: Int,
+  department: String,
+  `type`: String)
+
+case class Enrollment(
+  id: Long,
+  userId: Long,
+  courseId: Long,
+  isArchived: Option[Boolean] = None)
+```
+
+---
+
+# A more complex example.
+
+Some sample data.
+
+```scala
+val users = sc.parallelize(
+  User(1, "Teacher", "Doe", false, true) ::
+  User(2, "Another Teacher", "Doe", false, true) ::
+  User(3, "TA", "Doe", true, true) ::
+  User(4, "Lazy TA", "Doe", true, true) ::
+  User(5, "Student", "Doe", true, false) ::
+  User(6, "Another Student", "Doe", true, false) ::
+  User(7, "Yet Another Student", "Doe", true, false) :: Nil)
+```
+
+---
+
+# A more complex example.
+
+Some sample data.
+
+```scala
+val users = sc.parallelize(
+  User(1, "Teacher", "Doe", false, true) ::
+  User(2, "Another Teacher", "Doe", false, true) ::
+  User(3, "TA", "Doe", true, true) ::
+  User(4, "Lazy TA", "Doe", true, true) ::
+  User(5, "Student", "Doe", true, false) ::
+  User(6, "Another Student", "Doe", true, false) ::
+  User(7, "Yet Another Student", "Doe", true, false) :: Nil)
+
+val courses = sc.parallelize(
+  Course(1, "Algorithms", 100, "CS", "Core") ::
+  Course(2, "Dissecting Frogs", 200, "Bio", "Elective") ::
+  Course(3, "Global Warming: That thing invented by China", 100, "Bio",
+    "NowAnElective") ::
+  Course(4, "Computer Networks: Hacker stuff!", 300, "CS", "Elective") :: Nil)
+```
+
+---
+
+# A more complex example.
+
+Some sample data.
+
+```scala
+val users = sc.parallelize(
+  User(1, "Teacher", "Doe", false, true) ::
+  User(2, "Another Teacher", "Doe", false, true) ::
+  User(3, "TA", "Doe", true, true) ::
+  User(4, "Lazy TA", "Doe", true, true) ::
+  User(5, "Student", "Doe", true, false) ::
+  User(6, "Another Student", "Doe", true, false) ::
+  User(7, "Yet Another Student", "Doe", true, false) :: Nil)
+
+val courses = sc.parallelize(
+  Course(1, "Algorithms", 100, "CS", "Core") ::
+  Course(2, "Dissecting Frogs", 200, "Bio", "Elective") ::
+  Course(3, "Global Warming: That thing invented by China", 100, "Bio",
+    "NowAnElective") ::
+  Course(4, "Computer Networks: Hacker stuff!", 300, "CS", "Elective") :: Nil)
+
+val archivedEnrollments = sc.parallelize(
+  Enrollment(id = 11, userId = 1, courseId = 1, isArchived = Some(true)) ::
+  Enrollment(id = 12, userId = 3, courseId = 1, isArchived = Some(true)) ::
+  Enrollment(id = 13, userId = 5, courseId = 1, isArchived = Some(true)) ::
+  Enrollment(id = 14, userId = 2, courseId = 2, isArchived = Some(true)) ::
+  Enrollment(id = 15, userId = 6, courseId = 2, isArchived = Some(true)) :: Nil)
+```
+
+---
+
+# A more complex example.
+
+```scala
+val currentEnrollments = sc.parallelize(
+  Enrollment(id = 21, userId = 1, courseId = 1) ::
+  Enrollment(id = 22, userId = 3, courseId = 1) ::
+  Enrollment(id = 23, userId = 6, courseId = 1) ::
+  Enrollment(id = 24, userId = 4, courseId = 4) ::
+  Enrollment(id = 25, userId = 7, courseId = 4) ::
+  Enrollment(id = 26, userId = 2, courseId = 2) ::
+  Enrollment(id = 27, userId = 2, courseId = 3) ::
+  Enrollment(id = 26, userId = 5, courseId = 2) ::
+  Enrollment(id = 27, userId = 6, courseId = 3) :: Nil)
+```
+
+---
+
+# A more complex example.
+
+```scala
+val currentEnrollments = sc.parallelize(
+  Enrollment(id = 21, userId = 1, courseId = 1) ::
+  Enrollment(id = 22, userId = 3, courseId = 1) ::
+  Enrollment(id = 23, userId = 6, courseId = 1) ::
+  Enrollment(id = 24, userId = 4, courseId = 4) ::
+  Enrollment(id = 25, userId = 7, courseId = 4) ::
+  Enrollment(id = 26, userId = 2, courseId = 2) ::
+  Enrollment(id = 27, userId = 2, courseId = 3) ::
+  Enrollment(id = 26, userId = 5, courseId = 2) ::
+  Enrollment(id = 27, userId = 6, courseId = 3) :: Nil)
+
+val csCourses = courses.filter(_.department == "CS")
+```
+
+---
+
+# A more complex example.
+
+```scala
+val currentEnrollments = sc.parallelize(
+  Enrollment(id = 21, userId = 1, courseId = 1) ::
+  Enrollment(id = 22, userId = 3, courseId = 1) ::
+  Enrollment(id = 23, userId = 6, courseId = 1) ::
+  Enrollment(id = 24, userId = 4, courseId = 4) ::
+  Enrollment(id = 25, userId = 7, courseId = 4) ::
+  Enrollment(id = 26, userId = 2, courseId = 2) ::
+  Enrollment(id = 27, userId = 2, courseId = 3) ::
+  Enrollment(id = 26, userId = 5, courseId = 2) ::
+  Enrollment(id = 27, userId = 6, courseId = 3) :: Nil)
+
+val csCourses = courses.filter(_.department == "CS")
+
+val students = users.filter(_.isStudent).map { u => (u.id, u) }
+val studentsOnly = users.filter { u => u.isStudent && !u.isTeacher }
+  .map { s => (s.id, s) }
+```
+
+---
+
+# A more complex example.
+
+```scala
+val currentEnrollments = sc.parallelize(
+  Enrollment(id = 21, userId = 1, courseId = 1) ::
+  Enrollment(id = 22, userId = 3, courseId = 1) ::
+  Enrollment(id = 23, userId = 6, courseId = 1) ::
+  Enrollment(id = 24, userId = 4, courseId = 4) ::
+  Enrollment(id = 25, userId = 7, courseId = 4) ::
+  Enrollment(id = 26, userId = 2, courseId = 2) ::
+  Enrollment(id = 27, userId = 2, courseId = 3) ::
+  Enrollment(id = 26, userId = 5, courseId = 2) ::
+  Enrollment(id = 27, userId = 6, courseId = 3) :: Nil)
+
+val csCourses = courses.filter(_.department == "CS")
+
+val students = users.filter(_.isStudent).map { u => (u.id, u) }
+val studentsOnly = users.filter { u => u.isStudent && !u.isTeacher }
+  .map { s => (s.id, s) }
+
+val archivedCsEnrollments = archivedEnrollments.map { e => (e.userId, e) }
+  .join(students)
+val currentCsEnrollments = currentEnrollments.map { e => (e.userId, e) }
+  .join(studentsOnly)
+val allCurrentCsEnrollments = currentEnrollments.map { e => (e.userId, e) }
+  .join(students)
+```
+
+---
+
+# A more complex example.
+
+```scala
+val currentEnrollments = sc.parallelize(
+  Enrollment(id = 21, userId = 1, courseId = 1) ::
+  Enrollment(id = 22, userId = 3, courseId = 1) ::
+  Enrollment(id = 23, userId = 6, courseId = 1) ::
+  Enrollment(id = 24, userId = 4, courseId = 4) ::
+  Enrollment(id = 25, userId = 7, courseId = 4) ::
+  Enrollment(id = 26, userId = 2, courseId = 2) ::
+  Enrollment(id = 27, userId = 2, courseId = 3) ::
+  Enrollment(id = 26, userId = 5, courseId = 2) ::
+  Enrollment(id = 27, userId = 6, courseId = 3) :: Nil)
+
+val csCourses = courses.filter(_.department == "CS")
+
+val students = users.filter(_.isStudent).map { u => (u.id, u) }
+val studentsOnly = users.filter { u => u.isStudent && !u.isTeacher }
+  .map { s => (s.id, s) }
+
+val archivedCsEnrollments = archivedEnrollments.map { e => (e.userId, e) }
+  .join(students)
+val currentCsEnrollments = currentEnrollments.map { e => (e.userId, e) }
+  .join(studentsOnly)
+val allCurrentCsEnrollments = currentEnrollments.map { e => (e.userId, e) }
+  .join(students)
+
+val csEnrollments = archivedCsEnrollments.union(currentCsEnrollments).count
+val allCsEnrollments = archivedCsEnrollments.union(allCurrentCsEnrollments).count
+```
+
+---
+
+# A more complex example.
+
+Again we have a few skipped tasks.
+
+--
+
+.center[![:scale 100%](images/complexSkipped.png)]
+
+---
+
+# A more complex example.
+
+.center[![:scale 95%](images/complexStudents.png)]
+
+---
+
+# A more complex example.
+
+.center[![:scale 95%](images/complexAllStudents.png)]
 
 ---
 
