@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>Understanding Spark</title>
+    <title>Choosing Between Similar But Different Spark APIs</title>
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
     <style type="text/css">
       @import url(https://fonts.googleapis.com/css?family=Yanone+Kaffeesatz);
@@ -28,7 +28,7 @@
 
 class: center, middle
 
-# Understanding Spark
+# Choosing Between Similar But Different Spark APIs
 ### by Arun Allamsetty
 
 ???
@@ -767,45 +767,15 @@ Again we have a few skipped tasks.
 
 --
 
-With this information, let's see how RDDs are fault-tolerant.
+These lineage graphs are also provide fault-tolerance.
 
 --
 
-- If at a stage, a partition is lost due to some reason, Spark knows exactly how to get a new partition at that stage due to the DAG it created in the first place.
+- Tells Spark exactly how to recover a lost partition at any stage.
 
 --
 
 - Immutability of RDDs ensures that the newly resurrected partition has exactly the same data as before.
-
----
-
-# RDDs are typed
-
---
-
-Here's an example.
-
---
-
-```scala
-// Case classes in Scala are a classes with a few helper functions prebuilt
-// into them to avoid boilerplate code like in Java.
-case class Person(fname: String, lname: String, age: Int)
-
-// :: is a function in a Scala `List` which lets you prepend to a list. `Nil`
-// is an empty list. One of the helper function in a case class is `apply`
-// which lets you construct objects with function-like syntax.
-// `Person("John", "Doe", 25)` is same as `Person.apply("John", "Doe", 25)`.
-val persons = sc.parallelize(
-  Person("John", "Doe", 38) ::
-  Person("Jane", "Doe", 35) ::
-  Person("Jon", "Doe", 20) ::
-  Persom("Jonathan", "Doe", 31) :: Nil)
-
-val oldPersons = persons.filter(_.age > 30)
-val oldJons = oldPersons.filter(_.name.toLowerCase.startsWith("jon"))
-val numOldJons = oldJos.count
-```
 
 ---
 
@@ -817,69 +787,110 @@ SQL has been the de facto standard for data analysis since a long time.
 
 --
 
-  - Hadoop lacked in this area. SQL users were not excited to use MapReduce.
+  - Hadoop did not have built-in SQL support.
+
+???
+SQL users were not excited to use MapReduce.
+--
+
+  - Hive was created to run SQL on Hadoop. Popular, but was painfully slow.
 
 --
 
-  - Hive was created to run SQL on Hadoop.
+Spark shipped with HiveQL support (dubbed Shark).
 
---
+---
 
-  - It was very popular, but was painfully slow.
+# SQL on Spark
 
---
-
-To cater to SQL users, Spark added support for HiveQL which was dubbed Shark. In Spark 1.0, this is how SQL queries could be run on Spark.
+Example for Spark 1.0.
 
 --
 
 ```scala
+import org.apache.spark.sql.hive.HiveContext
 val hiveContext = new HiveContext(sc) // Needs an existing `SparkContext`.
 
-// The `Person` case class provided the necessary schema.
-val personsTable: SchemaRDD = hiveContext.createSchemaRDD(persons)
+// Re-using existing RDDs from a previous example.
+val usersTable = hiveContext.createSchemaRDD(users)
+val coursesTable = hiveContext.createSchemaRDD(courses)
+val archivedEnrollmentsTable = hiveContext.createSchemaRDD(archivedEnrollments)
+val enrollmentsTable = hiveContext.createSchemaRDD(enrollments)
 
-// Registering it makes it available as queriable a table.
-hiveContext.registerRDDAsTable(personsTable, "persons")
+// Registering the SchemaRDD makes it available for queries.
+hiveContext.registerRDDAsTable(usersTable, "users")
+hiveContext.registerRDDAsTable(coursesTable, "courses")
+hiveContext.registerRDDAsTable(archivedEnrollmentsTable, "archivedEnrollments")
+hiveContext.registerRDDAsTable(enrollmentsTable, "enrollments")
 
 // And now HiveQL queries can be run.
-val numOldJons = hiveContext.hql("""
-  |SELECT * FROM persons
-  |WHERE age > 30 AND lower(name) LIKE 'jon%'
+val csEnrollments = hiveContext.hql("""
+  |SELECT * FROM (
+  |  SELECT * FROM archivedEnrollments WHERE department = "CS" UNION
+  |  SELECT * FROM enrollments WHERE department = "CS"
+  |) e INNER JOIN (
+  |  SELECT * FROM users WHERE isStudent
+  |) s ON e.studentId = s.id
 """.stripMargin.trim).count
 ```
 
 ---
 
-# Project Tungsten
-
-This was a performance optimization initiative by Spark which resulted the introduction of the _Catalyst query optimizer_ for SQL queries over other things.
+# Conclusions so far
 
 --
 
-- Spark SQL was introduced. HiveQL support still existed through `HiveContext`, but was not recommended.
+- Use `RDD`s if you want to use Scala (case) classes.
 
+--
+
+- Use `HiveContext` with `SchemaRDD` if you want to run SQL queries.
+
+--
+
+- `SchemaRDD`s are not typesafe. So no compile-time warnings.
+
+---
+
+# Project Tungsten
+
+--
+
+_Catalyst query optimizer_ for SQL queries introduced.
+
+???
+Performance optimization initiative by Spark which introduced Catalyst query optimizer among other things.
+--
+
+- Spark SQL was introduced (to be used with `SQLContext`).
+
+--
+
+- HiveQL support still existed through `HiveContext`.
+
+???
+It was to be removed in future major releases.
 --
 
 - `SchemaRDD` was removed and a new `DataFrame` API was introduced.
 
 --
 
+The API was _similar_ to what it was before, except more performant.
 ```scala
+import org.apache.spark.sql.SQLContext
 val sqlContext = new SQLContext(sc) // Needs an existing `SparkContext`.
 
-// A DataFrame can be created using `createDataFrame` and passing an RDD of
-// a case class.
-val personsDf: DataFrame = sqlContext.createDataFrame(persons)
+// A `DataFrame` can be created using `createDataFrame` vs `createSchemaRDD`
+val usersDf = sqlContext.createDataFrame(users)
+...
 
-// A DataFrame can be registered by calling `registerTempTable` on the object.
-personsDf.registerTempTable("persons")
+// A DataFrame can be registered by calling `registerTempTable` on the object
+usersDf.registerTempTable("users")  // vs `registerRDDAsTable` on the context.
+...
 
-// SQL queries can be run using the `sql` function.
-val numOldJons = sqlContext.sql("""
-  |SELECT * FROM persons
-  |WHERE age > 30 AND lower(name) LIKE 'jon%'
-""".stripMargin.trim).count
+// SQL queries can be run using the `sql` function on a `SQLContext` vs `hql`.
+val csEnrollments = sqlContext.sql(...).count
 ```
 
 ---
@@ -888,123 +899,150 @@ val numOldJons = sqlContext.sql("""
 
 --
 
-It was similar to `SchemaRDD`, except it was more performant and supported more features.
-
---
-
 ```scala
-// No longer need SQLContext. Can run queries on the DataFrame object.
-personsDf.filter("age > 30").filter("lower(name) LIKE 'jon%'").count
+// Can run queries on the DataFrame object using RDD-like methods.
+coursesDf.filter("department = 'CS'")
 ```
 
---
-
 ```scala
-import org.apache.spark.sql.functions.lower
-// Required to use $"colName" which is syntactic sugar for new Column("colName").
+// Required to use $"colName" which is syntactic sugar for `new Column("colName")`.
 import sqlContext.implicits._
-
-// Quasi-SQL DSL to query DataFrames without writing SQL.
-personsDf.filter($"age" > 30).filter(lower($"name").startsWith("jon").count
+// `lit` creates Column with literal value.
+import org.apache.spark.sql.functions.lit
+usersDf.filter($"isStudent" === lit(true))
 ```
 
 --
 
 ```scala
-// Running non-DSL functions, like `map`, would return an RDD since there is no
-// way of knowing what each `Row` object would be mapped into. And all Catalyst
-// performance benefits would lost with RDDs.
-val info: RDD[String] = personsDf.map { row =>
+// Quasi-SQL DSL to query DataFrames without writing SQL.
+val enrollmentsDf = currentEnrollmentsDf.unionAll(archivedEnrollmentsDf)
+```
+
+--
+
+```scala
+// `map`, `flatMap` and similar methods, would return an RDD.
+val sortableNames: RDD[String] = usersDf.map { row =>
   // `Row`s are not typed. So we lose on type safety as well.
   val fname = row.getAs[String]("fname")
-  val age = row.getAs[Int]("age")
-
-  // Scala string interpolation with s"", similar to JS ``.
-  s"$fname aged $age."
+  val lname = row.getAs[String]("lname")
+  s"$lname, $fname"
 }
 ```
 
 ---
 
-# RDD vs DataFrame
-
-| RDD | DataFrame |
-|-----|-----------|
-| Typed. Error can be caught during compilation. | Untyped. Errors surface at runtime. |
-
---
-| Slower. Cannot benefit from Catalyst optimizer. | Faster. Heavily uses Catalyst optimizer. |
-
---
-| Cannot run SQL. | Can run SQL. |
-
---
-| Fully supports `map`-like operations | `map`-like operations return an RDD. |
+# Conclusions so far
 
 --
 
-In the end,
+- Use `RDD`s if you want to use Scala (case) classes.
 
 --
 
-- People who heavily invested in RDDs in the beginning were not benefiting from the Catalyst optimizer.
+- Use ~~`HiveContext`~~ `SQLContext` with ~~`SchemaRDD`s~~ `DataFrame`s if you want to run SQL queries.
 
 --
 
-- People who wanted the benefits of Catalyst optimizer and wanted to mix and match SQL and MapReduce didn't have a good option.
+- ~~`SchemaRDD`s~~ `DataFrame`s are (also) not typesafe. So no compile-time warnings.
 
+--
+
+- `DataFrame`s are more performant than `RDD`s.
+
+--
+
+- `map`ping over a `DataFrame` returns an `RDD`.
+
+???
+- People who invested in RDDs could not benefit from Catalyst.
+- People who wanted the benefits of Catalyst optimizer lost on type-safety.
 ---
 
 # Dataset API
 
 --
 
-- Spark 1.6 witnessed the release of the Dataset API which _supposedly_ had the best of both worlds.
+Spark 1.6 released with `Dataset` API.
 
 --
 
-- `Dataset`s were used the Catalyst optimizer and were typed.
+- Typesafe way to benefit from the Catalyst optimizer.
 
 --
 
-- They did not support SQL.
+- Did not support SQL.
 
 --
 
-- So they were *not* the best of both worlds, but just better RDDs.
+- `map`-like methods did not return `RDD`s anymore.
 
 --
 
 ```scala
+org.apache.spark.sql.Dataset
+
 // Import for Catalyst to understand the typed case classes. This imports
 // implicit encoders for generic types (String, Long, etc.) and case classes.
 import sqlContext.implicits._
 
-// The `as[Person]` creates a `Dataset[Person]`
-val personsDs = sqlContext.createDataFrame(persons).as[Person]
+// The `as[User]` creates a `Dataset[User]`
+val usersDs = sqlContext.createDataFrame(users).as[User]
 
-// Operations similar to RDDs can be performed.
-val oldJons = personsDs.filter { person =>
-  person.age > 30 && person.name.toLowercase.startsWith("jon")
+// Operations similar to RDDs can be performed without losing on performance.
+val oldJons: Dataset[String] = personsDs.filter(_.isStudent).map { s =>
+  s"${s.lname}, ${s.fname}"
 }
-val numOldJons = oldJons.count
 ```
 
+---
+
+# Conclusions so far
+
+--
+
+- Use ~~`RDD`s~~ `Dataset`s if you want to use Scala (case) classes.
+
+--
+
+- Use ~~`HiveContext`~~ `SQLContext` with ~~`SchemaRDD`s~~ `DataFrame`s if you want to run SQL queries.
+
+- ~~`SchemaRDD`s~~ `DataFrame`s are (also) not typesafe. So no compile-time warnings.
+
+- `DataFrame`s are more performant than `RDD`s.
+
+- `map`ping over a `DataFrame` returns an `RDD`.
+
+???
+No changes here.
+--
+
+- `map`ping over a `Dataset` returns a `Dataset`.
+
+--
+
+- `Dataset`s are as performant as `DataFrame`s along with being typesafe.
+
+???
+So no reason to use DF unless SQL. Avoid RDDs.
 ---
 
 # Spark 2.0+ changes
 
 --
 
-- `Dataset`s were *now* the best of both worlds with added support for SQL.
+- `DataFrame` _API_ has been removed.
 
 --
 
-- `DataFrame` _API_ was removed.
+  - `DataFrame`, however, still exists for backward-compatibility.
+
+  - It is basically an alias for `Dataset[Row]`.
 
 --
 
-  - `DataFrame`, however, still exists for backward-compatibility but is basically an alias for `Dataset[Row]`.
+- Hence, `Dataset`s *now* support SQL.
 
 --
 
@@ -1034,11 +1072,7 @@ val spark = SparkSession.builder
 
 ---
 
-# Examples
-
---
-
-SQL support on `Dataset`s.
+# SQL support example
 
 --
 
@@ -1046,31 +1080,47 @@ SQL support on `Dataset`s.
 // Import implicits from `SparkSession` similar to `SQLContext`.
 import spark.implicits._
 
-// Read data as `Dataset`.
-val personsDs = spark.createDataset(persons)
+// `Dataset` can be created using `createDataset`
+val usersDs = spark.createDataset(users) // vs `createDataFrame(users).as[User]`.
 
 // Convert the `Dataset` to `DataFrame` and register as a temporary view.
-personsDs.toDf.createOrReplaceTempView("persons")
+usersDs.toDf.createOrReplaceTempView("users")
 
-// Run SQL queries.
-val numOldJons = spark.sql("""
-  |SELECT * FROM persons
-  |WHERE age > 30 AND lower(name) LIKE 'jon%'
-""".stripMargin.trim).count
+// SQL queries can be run using the `sql` function on a `SparkSession`
+val csEnrollments = spark.sql(...).count  // vs `SQLContext`.
 ```
+
+---
+
+# Final Conclusions
 
 --
 
-RDD-like operations.
+- Use ~~`RDD`s~~ `Dataset`s if you want to use Scala (case) classes.
 
 --
 
-```scala
-val oldJons = personsDs.filter { person =>
-  person.age > 30 && person.name.toLowercase.startsWith("jon")
-}
-val numOldJons = oldJons.count
-```
+- Use ~~`HiveContext`~~ ~~`SQLContext`~~ `SparkSession` with ~~`SchemaRDD`s~~ `DataFrame`s/`Dataset`s if you want to run SQL queries.
+
+--
+
+- ~~`SchemaRDD`s~~ `DataFrame`s are _still_ not typesafe being an alias for `Dataset[Row]`.
+
+--
+
+- `DataFrame`s are more performant than `RDD`s.
+
+--
+
+- `map`ping over a `DataFrame` returns ~~an `RDD`~~ a `Dataset`.
+
+--
+
+- `map`ping over a `Dataset` returns a `Dataset`.
+
+--
+
+#### So if you're using Spark 2, try using `Dataset`s as much as possible.
 
 ---
 class: middle, center
