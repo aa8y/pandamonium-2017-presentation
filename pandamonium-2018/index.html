@@ -32,6 +32,669 @@ class: center, middle
 ### by Arun Allamsetty
 
 ---
+# What is a Data Lake?
+
+--
+#### AWS defines it as
+
+A data lake is an architectural approach that allows you to store massive amounts of data into a central location, so it's readily available to be categorized, processed, analyzed and consumed by diverse groups within an organization.
+
+--
+#### So, in simple words
+
+A central repository for all the data in an organization.
+
+???
+Ref: https://aws.amazon.com/big-data/data-lake-on-aws/
+
+---
+# Canvas PostgreSQL databases
+
+Canvas databases are sharded.
+
+--
+
+.left[![:scale 100%](images/db/1.png)]
+
+---
+# Canvas PostgreSQL databases
+
+Canvas databases are sharded.
+
+.left[![:scale 100%](images/db/2.png)]
+
+---
+# Canvas PostgreSQL databases
+
+Canvas databases are sharded.
+
+.left[![:scale 100%](images/db/3.png)]
+
+---
+# Canvas PostgreSQL databases
+
+Canvas databases are sharded.
+
+.left[![:scale 100%](images/db/4.png)]
+
+---
+# Canvas PostgreSQL databases
+
+Canvas databases are sharded.
+
+.left[![:scale 100%](images/db/5.png)]
+
+---
+# Canvas PostgreSQL databases
+
+Canvas databases are sharded.
+
+.left[![:scale 100%](images/db/6.png)]
+
+* Some shards, mostly the older ones are **multi-tenant**.
+
+---
+# Canvas PostgreSQL databases
+
+Canvas databases are sharded.
+
+.left[![:scale 100%](images/db/7.png)]
+
+* Some shards, mostly the older ones are **multi-tenant**.
+
+--
+
+* Newer shards are almost, always, **single-tenant**.
+
+---
+# Canvas Data Lake
+
+--
+
+* Brings the tables from all the shards in one central repository, where they're all queriable, together.
+
+--
+
+* Adds the _Shard ID_ (named `g_shard_id`) to all tables to partition them by their source shards.
+
+--
+
+And a few more nifty things, we'll see later.
+
+.center[![:scale 35%](images/yes.gif)]
+
+---
+# Technologies
+
+--
+
+.left[![:scale 30%](images/tech/spark-logo.png)]
+
+--
+
+.left[![:scale 30%](images/tech/aws-s3-logo.png)]
+
+--
+
+.left[![:scale 30%](images/tech/aws-athena-logo.png)]
+
+---
+# Athena
+
+--
+* Announced in November 2016 during AWS Re:invent.
+
+--
+
+* **Serverless** query service which can query data on **S3**.
+
+--
+
+* Uses the **PrestoDB** query engine as the backend.
+
+--
+
+* Full plug-n-play capability.
+
+---
+# Let's take a quiz
+
+### How many accounts does Canvas have in total?
+
+(a) 1.83 million
+
+(b) 3.19 million
+
+(c) 5.40 million
+
+(d) 7.89 million
+
+--
+#### Correct Answer
+
+(b) 3.19 million.
+
+--
+#### Query
+
+```sql
+SELECT count(*) FROM accounts WHERE deleted_at IS NULL
+```
+
+???
+3193424
+
+---
+# Let's take a quiz
+
+### How many courses does Canvas have?
+
+(a) 10.5 million
+
+(b) 19.8 million
+
+(c) 37.5 million
+
+(d) 48.4 million
+
+--
+#### Correct Answer
+
+(c) 37.5 million.
+
+--
+#### Query
+
+```sql
+SELECT count(*) FROM courses
+```
+???
+37502982
+---
+# Let's take a quiz
+
+### How many accounts were added to Canvas since Fall 2017?
+
+(a) 30 thousand
+
+(b) 47 thousand
+
+(c) 65 thousand
+
+(d) 78 thousand
+
+--
+#### Correct Answer
+
+(c) 65 thousand
+
+--
+#### Query
+
+```sql
+SELECT count(*) FROM accounts
+WHERE
+  deleted_at IS NULL AND
+  created_at >= timestamp '2017-08-01'
+```
+???
+65221
+---
+# Let's take a quiz
+
+### Who made more submissions per enrollment since last Fall?
+
+a. BYU
+
+b. USU
+
+c. Utah
+
+d. All made exactly the same number.
+
+---
+# Let's take a quiz
+
+### Who made more submissions per enrollment since last Fall?
+
+a. BYU (44)
+
+b. USU (18)
+
+c. Utah (26)
+
+d. ~~All made exactly the same number.~~
+
+#### Correct Answer
+
+(a) BYU
+
+---
+#### Query
+
+```sql
+SELECT
+  CASE
+    WHEN e.g_shard_id = 3333 THEN 'BYU'
+    WHEN e.g_shard_id = 2222 THEN 'USU'
+    ELSE 'Utah'
+  END AS school,
+  fall_submissions / fall_enrollments AS submissions_per_enrollment
+FROM (
+  SELECT
+    g_shard_id,
+    count(*) AS fall_enrollments
+  FROM enrollments
+  WHERE
+    g_shard_id IN (1111, 2222, 3333) AND
+    created_at >= timestamp '2017-08-01'
+  GROUP BY g_shard_id
+) e INNER JOIN (
+  SELECT
+    g_shard_id,
+    count(*) AS fall_submissions
+  FROM submissions
+  WHERE
+    g_shard_id IN (1111, 2222, 3333) AND
+    created_at >= timestamp '2017-08-01'
+  GROUP BY g_shard_id
+) s ON
+e.g_shard_id = s.g_shard_id
+```
+
+---
+# YAML columns
+
+--
+### Reasons why YAML is a good choice:
+
+--
+.center[![:scale 40%](images/yaml/best-bear.gif)]
+
+#### It's the best serialization type because it's human-readable.
+
+---
+# YAML columns
+
+### Reasons why YAML is a good choice:
+
+.center[![:scale 40%](images/yaml/black-bear.gif)]
+
+#### It's the best serialization type ~~because it's human-readable~~ for certain situations.
+
+#### Definitely NOT for querying data via SQL.
+
+---
+# YAML columns
+
+### _Canvas Data_ to the rescue!
+
+--
+#### We deserialize the YAML and make _everything_ queriable.
+
+.center[![:scale 50%](images/yaml/bears-beets.gif)]
+
+--
+
+#### So if you find a certain YAML column which you want to query, ask us :)
+
+---
+# Let's answer some questions
+
+### What is the distribution of questions about Donald Trump over the years?
+
+--
+#### Query
+
+```sql
+SELECT
+	year,
+	count(*) AS trump_mentions
+FROM (
+	SELECT
+		g_shard_id,
+		id,
+		year(created_at) AS year
+	FROM quiz_questions
+	WHERE lower(question_data.question_text) LIKE '%donald trump%'
+) x
+GROUP BY year
+ORDER BY year
+```
+
+---
+# Let's answer some questions
+
+### What is the distribution of questions about Donald Trump over the years?
+
+.left[![:scale 100%](images/chart/question_like_trump_by_year.png)]
+
+---
+# Let's answer some questions
+
+### What is the _monthly_ distribution of questions about Donald Trump since November 2016?
+
+--
+#### Query
+
+```sql
+SELECT
+  year,
+  month,
+  count(*) AS trump_mentions
+FROM (
+  SELECT
+    g_shard_id,
+    id,
+    year(created_at) AS year,
+    month(created_at) AS month
+  FROM quiz_questions
+  WHERE
+    created_at >= timestamp '2016-11-01' AND
+    lower(question_data.question_text) LIKE '%donald trump%'
+) x
+GROUP BY year, month
+ORDER BY year, month
+```
+
+---
+# Let's answer some questions
+
+### What is the _monthly_ distribution of questions about Donald Trump since November 2016?
+
+.left[![:scale 100%](images/chart/question_like_trump_by_month.png)]
+
+---
+# Let's answer some questions
+
+### What is the _daily_ distribution of questions about Donald Trump in August 2017?
+
+--
+#### Query
+
+```sql
+SELECT
+  day,
+  count(*) AS trump_mentions
+FROM (
+  SELECT
+    g_shard_id,
+    id,
+    year(created_at) AS year,
+    month(created_at) AS month,
+    day(created_at) AS day
+  FROM quiz_questions
+  WHERE lower(question_data.question_text) LIKE '%donald trump%'
+) x
+WHERE year = 2017 AND month = 8
+GROUP BY day
+ORDER BY day
+```
+
+---
+# Let's answer some questions
+
+### What is the _daily_ distribution of questions about Donald Trump in August 2017?
+
+.left[![:scale 80%](images/chart/question_like_trump_by_day.png)]
+
+---
+# Let's answer some questions
+
+### What is the distribution of answers about Donald Trump, in questions not related to him, over the years?
+--
+
+#### Query
+
+```sql
+SELECT
+  year,
+  count(*) AS trump_mentions
+FROM (
+  SELECT
+    year(created_at) AS year,
+    a.answer
+  FROM
+    quiz_questions,
+    unnest(question_data.answers) AS a (answer)
+  WHERE
+    lower(question_data.question_text) NOT LIKE '%donald trump%'
+) x
+WHERE lower(answer.text) LIKE '%donald trump%'
+GROUP BY year
+ORDER BY year
+```
+
+---
+# Let's answer some questions
+
+### What is the distribution of answers about Donald Trump, in questions not related to him, over the years?
+
+.left[![:scale 100%](images/chart/question_not_like_answer_like_trump_by_year.png)]
+
+---
+# Let's answer some questions
+
+### What is the _monthy_ distribution of answers about Donald Trump, in questions not related to him?
+
+--
+#### Query
+
+```sql
+SELECT
+  year,
+  month,
+  count(*) AS trump_mentions
+FROM (
+  SELECT
+    year(created_at) AS year,
+    month(created_at) AS month,
+    a.answer
+  FROM
+    quiz_questions,
+    unnest(question_data.answers) AS a (answer)
+  WHERE
+    lower(question_data.question_text) NOT LIKE '%donald trump%' AND
+    created_at >= timestamp '2016-11-01'
+) x
+WHERE lower(answer.text) LIKE '%donald trump%'
+GROUP BY year, month
+ORDER BY year, month
+```
+
+---
+# Let's answer some questions
+
+### What is the _monthy_ distribution of answers about Donald Trump, in questions not related to him?
+
+.left[![:scale 100%](images/chart/question_not_like_answer_like_trump_by_month.png)]
+
+---
+# Let's answer some questions
+
+### What is the _daily_ distribution of answers about Donald Trump, in questions not related to him?
+
+--
+#### Query
+
+```sql
+SELECT
+  day,
+  count(*) AS trump_mentions
+FROM (
+  SELECT
+    year(created_at) AS year,
+    month(created_at) AS month,
+    day(created_at) AS day,
+    a.answer
+  FROM
+    quiz_questions,
+    unnest(question_data.answers) AS a (answer)
+) x
+WHERE 
+  year = 2017 AND
+  month = 8 AND 
+  lower(answer.text) LIKE '%donald trump%'
+GROUP BY day
+ORDER BY day
+```
+
+---
+# Let's answer some questions
+
+### What is the _daily_ distribution of answers about Donald Trump, in questions not related to him?
+
+.left[![:scale 100%](images/chart/question_not_like_answer_like_trump_by_day.png)]
+
+---
+# Let's answer some questions
+
+```sql
+WITH trump_questions AS (
+  SELECT
+    question_data.question_text AS question,
+    year(created_at) AS year,
+    month(created_at) AS month,
+    day(created_at) AS day
+  FROM quiz_questions
+  WHERE lower(question_data.question_text) LIKE '%donald trump%'
+), trump_mentions AS (
+  SELECT day, count(*) AS mentions
+  FROM trump_questions
+  WHERE year = 2017 AND month = 8
+  GROUP BY day
+), question_tokens AS (
+  SELECT split(lower(q.question), ' ') AS words
+  FROM trump_questions q
+  INNER JOIN trump_mentions m ON
+    q.year = 2017 AND q.month = 8 AND
+    q.day = m.day AND m.mentions > 180
+)
+SELECT word, count(*) AS count
+FROM
+  question_tokens,
+  unnest(words) AS w (word)
+WHERE word NOT IN ('', 'a', 'about', 'above', 'after', 'again', 'against', 'all', 'am', 'an', 'and', 'any', 'are', 'as', 'at', 'be', 'because', 'been', 'before', 'being', 'below', 'between', 'both', 'but', 'by', 'could', 'did', 'do', 'does', 'doing', 'down', 'during', 'each', 'few', 'for', 'from', 'further', 'had', 'has', 'have', 'having', 'he', 'he''d', 'he''ll', 'he''s', 'her', 'here', 'here''s', 'hers', 'herself', 'him', 'himself', 'his', 'how', 'how''s', 'i', 'i''d', 'i''ll', 'i''m', 'i''ve', 'if', 'in', 'into', 'is', 'it', 'it''s', 'its', 'itself', 'let''s', 'me', 'more', 'most', 'my', 'myself', 'nor', 'of', 'on', 'once', 'only', 'or', 'other', 'ought', 'our', 'ours', 'ourselves', 'out', 'over', 'own', 'same', 'she', 'she''d', 'she''ll', 'she''s', 'should', 'so', 'some', 'such', 'than', 'that', 'that''s', 'the', 'their', 'theirs', 'them', 'themselves', 'then', 'there', 'there''s', 'these', 'they', 'they''d', 'they''ll', 'they''re', 'they''ve', 'this', 'those', 'through', 'to', 'too', 'under', 'until', 'up', 'very', 'was', 'we', 'we''d', 'we''ll', 'we''re', 'we''ve', 'were', 'what', 'what''s', 'when', 'when''s', 'where', 'where''s', 'which', 'while', 'who', 'who''s', 'whom', 'why', 'why''s', 'with', 'would', 'you', 'you''d', 'you''ll', 'you''re', 'you''ve', 'your', 'yours', 'yourself', 'yourselves')
+GROUP BY word
+ORDER BY count DESC
+```
+
+---
+# Let's answer some questions
+
+.center[![:scale 105%](images/chart/question_like_trump_word_count.png)]
+
+---
+# Let's answer some questions
+
+```sql
+WITH trump_answers AS (
+  SELECT
+    a.answer AS answer,
+    year(created_at) AS year,
+    month(created_at) AS month,
+    day(created_at) AS day
+  FROM
+    quiz_questions,
+    unnest(question_data.answers) AS a (answer)
+  WHERE lower(question_data.question_text) NOT LIKE '%donald trump%'
+), trump_mentions AS (
+  SELECT day, count(*) AS mentions
+  FROM trump_answers
+  WHERE year = 2017 AND month = 8
+  GROUP BY day
+), answer_tokens AS (
+  SELECT split(lower(a.answer.text), ' ') AS words
+  FROM trump_answers a
+  INNER JOIN trump_mentions m ON
+    a.year = 2017 AND a.month = 8 AND
+    a.day = m.day AND m.mentions > 180
+)
+SELECT word, count(*) AS count
+FROM answer_tokens,
+  unnest(words) AS w (word)
+WHERE word NOT IN ('', 'a', 'about', 'above', 'after', 'again', 'against', 'all', 'am', 'an', 'and', 'any', 'are', 'as', 'at', 'be', 'because', 'been', 'before', 'being', 'below', 'between', 'both', 'but', 'by', 'could', 'did', 'do', 'does', 'doing', 'down', 'during', 'each', 'few', 'for', 'from', 'further', 'had', 'has', 'have', 'having', 'he', 'he''d', 'he''ll', 'he''s', 'her', 'here', 'here''s', 'hers', 'herself', 'him', 'himself', 'his', 'how', 'how''s', 'i', 'i''d', 'i''ll', 'i''m', 'i''ve', 'if', 'in', 'into', 'is', 'it', 'it''s', 'its', 'itself', 'let''s', 'me', 'more', 'most', 'my', 'myself', 'nor', 'of', 'on', 'once', 'only', 'or', 'other', 'ought', 'our', 'ours', 'ourselves', 'out', 'over', 'own', 'same', 'she', 'she''d', 'she''ll', 'she''s', 'should', 'so', 'some', 'such', 'than', 'that', 'that''s', 'the', 'their', 'theirs', 'them', 'themselves', 'then', 'there', 'there''s', 'these', 'they', 'they''d', 'they''ll', 'they''re', 'they''ve', 'this', 'those', 'through', 'to', 'too', 'under', 'until', 'up', 'very', 'was', 'we', 'we''d', 'we''ll', 'we''re', 'we''ve', 'were', 'what', 'what''s', 'when', 'when''s', 'where', 'where''s', 'which', 'while', 'who', 'who''s', 'whom', 'why', 'why''s', 'with', 'would', 'you', 'you''d', 'you''ll', 'you''re', 'you''ve', 'your', 'yours', 'yourself', 'yourselves')
+GROUP BY word ORDER BY count DESC
+```
+---
+# Let's answer some questions
+
+.center[![:scale 105%](images/chart/question_not_like_answer_like_trump_word_count.png)]
+
+---
+# Getting access
+
+.center[![:scale 50%](images/access/open-for-business-1.gif)]
+
+* Have a use-case to get access. Since it's customer data, it can't be free-for-all.
+
+---
+# Getting access
+
+.center[![:scale 50%](images/access/open-for-business-2.gif)]
+
+* Have a use-case to get access. Since it's customer data, it can't be free-for-all.
+
+* Make a JIRA ticket in the `DS` domain. Get your manager's approval for 30 days of access.
+
+---
+# Getting access
+
+.center[![:scale 50%](images/access/open-for-business-3.gif)]
+
+* Have a use-case to get access. Since it's customer data, it can't be free-for-all.
+
+* Make a JIRA ticket in the `DS` domain. Get your manager's approval for 30 days of access.
+
+* To get permanent access you need to get approval from Matt Hillary (@mhillary).
+
+---
+# Be responsible
+
+#### Remember, this is customer data and you have to handle it with caution.
+
+.center[![:scale 50%](images/access/no-nonsense-1.gif)]
+
+---
+# Be responsible
+
+#### Remember, this is customer data and you have to handle it with caution.
+
+.center[![:scale 50%](images/access/no-nonsense-2.gif)]
+
+* Try not download data with PII (Personally Identifiable Information) on to your local machines.
+
+---
+# Be responsible
+
+#### Remember, this is customer data and you have to handle it with caution.
+
+.center[![:scale 50%](images/access/no-nonsense-3.gif)]
+
+* Try not download data with PII (Personally Identifiable Information) on to your local machines.
+
+* And this should be obvious, but _never_ distribute it.
+
+--
+
+_Let's make our data, safe again._
+
+---
+# Learning Resources
+
+--
+
+#### Athena User Guide
+
+https://docs.aws.amazon.com/athena/latest/ug/what-is.html
+
+--
+
+#### PrestoDB Documentation
+
+https://prestodb.io/docs/current/index.html
+
+---
 class: middle, center
 
 # Thank you
